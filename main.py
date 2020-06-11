@@ -12,16 +12,15 @@ from sklearn.metrics import recall_score, precision_score, f1_score, roc_auc_sco
 from matplotlib import pyplot
 
 
-def down_sample(X_train, X_test, y_train, y_test):
+def down_sample(train, test):
 
-    dataset = X_train.copy()
-    dataset["Class"] = y_train.values
+    train_data = train.copy()
 
     # Separate majority and minority classes
-    majority = dataset[dataset["Class"] == 0]
-    minority = dataset[dataset["Class"] == 1]
+    majority = train_data[train_data["Class"] == 0]
+    minority = train_data[train_data["Class"] == 1]
 
-    num_of_data = dataset["Class"].value_counts()[1]
+    num_of_data = train_data["Class"].value_counts()[1]
     majority_downsampled = resample(
         majority, replace=False, n_samples=num_of_data, random_state=123
     )
@@ -29,8 +28,16 @@ def down_sample(X_train, X_test, y_train, y_test):
     # Combine minority class with downsampled majority class
     df_downsampled = pd.concat([majority_downsampled, minority])
 
+    print("Size of TRAIN is: " + str(df_downsampled.shape[0]))
+    print("Ratio of TRAIN is: " + str(df_downsampled['Class'].value_counts(normalize=True)[1]))
+
     X = df_downsampled.drop(columns=["Class"])
     y = df_downsampled["Class"]
+
+    X_test = test.drop("Class", axis=1)
+    y_test = test["Class"]
+    print("Size of TEST is: " + str(test.shape[0]))
+    print("Ratio of TEST is: " + str(test['Class'].value_counts(normalize=True)[1]))
 
     y_pred = run_random_forest(X, X_test, y)
 
@@ -116,24 +123,20 @@ if __name__ == "__main__":
 
     dataset.drop(["Time", "Amount"], axis=1, inplace=True)
 
-    X = dataset.drop("Class", axis=1)
-    y = dataset["Class"]
-
     # Split to 10-Fold
-    sss = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
+    skfold = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
     n = 0
     results_df = pd.DataFrame(columns=('method', 'fold_number', 'class_ratio', 'f1', 'precision', 'recall', 'auc'))
 
-    for train_index, test_index in sss.split(X, y):
+    for train_index, test_index in skfold.split(dataset, dataset['Class']):
         print("**** Fold #", n, " ****")
         print("Train:", train_index, "Test:", test_index)
 
-        Xtrain, Xtest = X.iloc[train_index], X.iloc[test_index]
-        ytrain, ytest = y.iloc[train_index], y.iloc[test_index]
+        train, test = dataset.iloc[train_index], dataset.iloc[test_index]
 
-        class_ratio = ytest.value_counts(normalize=True)[1]
+        class_ratio = test['Class'].value_counts(normalize=True)[1]
 
-        fold_res = down_sample(Xtrain, Xtest, ytrain, ytest)
-        results_df.loc[n] = ['down_sample', n, class_ratio] + fold_res
+        fold_results = down_sample(train, test)
+        results_df.loc[n] = ['down_sample', n, class_ratio] + fold_results
 
         n += 1
