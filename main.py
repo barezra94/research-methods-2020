@@ -34,7 +34,7 @@ def down_sample(X_train, X_test, y_train, y_test):
 
     y_pred = run_random_forest(X, X_test, y)
 
-    classification_metrics(y_test, y_pred)
+    return classification_metrics(y_test, y_pred)
 
 
 def random_split(dataset, label_name):
@@ -90,14 +90,20 @@ def run_random_forest(X_train, X_test, y_train):
 
 def classification_metrics(y_test, y_pred):
     copy_pred = y_pred.round()
-    print("F1 Score: ", f1_score(y_test, copy_pred))
-    print("Percision: ", precision_score(y_test, copy_pred))
-    print("Recall: ", recall_score(y_test, copy_pred))
-    print("AUC: ", roc_auc_score(y_test, copy_pred))
+    f1 = f1_score(y_test, copy_pred)
+    p = precision_score(y_test, copy_pred)
+    r = recall_score(y_test, copy_pred)
+    auc = roc_auc_score(y_test, copy_pred)
+    print("F1 Score: ", f1)
+    print("Percision: ", p)
+    print("Recall: ", r)
+    print("AUC: ", auc)
+    return [f1, p, r, auc]
 
 
 if __name__ == "__main__":
     dataset = pd.read_csv("data/creditcard.csv")
+    print(dataset.shape)
     rob_scaler = RobustScaler()
 
     # Standerize the data
@@ -115,14 +121,19 @@ if __name__ == "__main__":
 
     # Split to 10-Fold
     sss = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
-    n = 1
+    n = 0
+    results_df = pd.DataFrame(columns=('method', 'fold_number', 'class_ratio', 'f1', 'precision', 'recall', 'auc'))
 
     for train_index, test_index in sss.split(X, y):
         print("**** Fold #", n, " ****")
         print("Train:", train_index, "Test:", test_index)
+
         Xtrain, Xtest = X.iloc[train_index], X.iloc[test_index]
         ytrain, ytest = y.iloc[train_index], y.iloc[test_index]
 
-        down_sample(Xtrain, Xtest, ytrain, ytest)
+        class_ratio = ytest.value_counts(normalize=True)[1]
+
+        fold_res = down_sample(Xtrain, Xtest, ytrain, ytest)
+        results_df.loc[n] = ['down_sample', n, class_ratio] + fold_res
 
         n += 1
