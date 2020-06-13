@@ -3,7 +3,7 @@ import numpy as np
 
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, RobustScaler
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import StratifiedKFold
 from sklearn.cluster import KMeans
 from sklearn.utils import resample
@@ -39,68 +39,72 @@ def down_sample(train, test):
     print("Size of TEST is: " + str(test.shape[0]))
     print("Ratio of TEST is: " + str(test['Class'].value_counts(normalize=True)[1]))
 
-    y_pred = run_random_forest(X, X_test, y)
+    y_prob = run_random_forest(X, X_test, y)
 
-    return classification_metrics(y_test, y_pred)
+    print(y_prob)
+
+    return classification_metrics(y_test, y_prob)
 
 
-def random_split(dataset, label_name):
+def split_and_ensemble(train, test, random = True):
     # Get ratio of majority and minority
     ratio = (
-        dataset[label_name].value_counts()[0] / dataset[label_name].value_counts()[1]
+            train["Class"].value_counts()[0] / dataset["Class"].value_counts()[1]
     )
+    R = int(ratio)
+
+    train_data = train.copy()
+
+    X_test = test.drop("Class", axis=1)
+    y_test = test["Class"]
+    print("Size of TEST is: " + str(test.shape[0]))
+    print("Ratio of TEST is: " + str(test['Class'].value_counts(normalize=True)[1]))
 
     # Separate majority and minority classes
-    majority = dataset[dataset[label_name] == 0]
-    minority = dataset[dataset[label_name] == 1]
+    majority = train_data[train_data["Class"] == 0]
+    minority = train_data[train_data["Class"] == 1]
 
     # Split into N (=ratio) groups
-    split_majorities = np.array_split(majority, ratio)
+    if random:
+        #split randomly
+        split_majorities = np.array_split(majority, R)
+    else:
+        # split by clustering
+        # TODO
+        split_majorities = None
 
-    # Run N classification models on split_majorities
+    R_test_results = []
+    i = 0
     for group in split_majorities:
         df = pd.concat([group, minority])
+        
+        X = df.drop(columns=["Class"])
+        y = df["Class"]
 
-        X = df.drop(columns=[label_name])
-        y = df[label_name]
+        y_prob = run_random_forest(X, X_test,y)
 
-        X_train, X_test, y_train, y_test = train_test_split(
-            X, y, test_size=0.2, random_state=0
-        )
+        R_test_results.append(y_prob)
 
-        # y_pred = run_random_forest(X_train, X_test, y_train, y_test)
+    y_prob_ensembled = np.mean(R_test_results, axis=0)
 
-        # TODO: Ensamble the results
-
-
-def cluster_split(dataset, label_name):
-    # Get ratio of majority and minority
-    ratio = (
-        dataset[label_name].value_counts()[0] / dataset[label_name].value_counts()[1]
-    )
-
-    ratio = int(ratio)
-
-    # Separate majority and minority classes
-    majority = dataset[dataset[label_name] == 0]
-    minority = dataset[dataset[label_name] == 1]
+    return classification_metrics(y_test, y_prob_ensembled)
 
 
 def run_random_forest(X_train, X_test, y_train):
 
-    regressor = RandomForestRegressor(n_estimators=20, random_state=0)
-    regressor.fit(X_train, y_train)
-    y_pred = regressor.predict(X_test)
+    clf = RandomForestClassifier(n_estimators=20, random_state=0)
+    clf.fit(X_train, y_train)
+    y_prob = clf.predict_proba(X_test)[:, 1]
 
-    return y_pred
+    return y_prob
 
 
-def classification_metrics(y_test, y_pred):
-    copy_pred = y_pred.round()
-    f1 = f1_score(y_test, copy_pred)
-    p = precision_score(y_test, copy_pred)
-    r = recall_score(y_test, copy_pred)
-    auc = roc_auc_score(y_test, copy_pred)
+def classification_metrics(y_test, y_prob):
+    pred = y_prob.round()
+    f1 = f1_score(y_test, pred)
+    p = precision_score(y_test, pred)
+    r = recall_score(y_test, pred)
+    auc = roc_auc_score(y_test, y_prob)
     print("F1 Score: ", f1)
     print("Percision: ", p)
     print("Recall: ", r)
@@ -125,11 +129,12 @@ if __name__ == "__main__":
 
     # Split to 10-Fold
     skfold = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
-    n = 0
+    fn = 0
+    i = 0
     results_df = pd.DataFrame(columns=('method', 'fold_number', 'class_ratio', 'f1', 'precision', 'recall', 'auc'))
 
     for train_index, test_index in skfold.split(dataset, dataset['Class']):
-        print("**** Fold #", n, " ****")
+        print("**** Fold #", fn, " ****")
         print("Train:", train_index, "Test:", test_index)
 
         train, test = dataset.iloc[train_index], dataset.iloc[test_index]
@@ -137,6 +142,13 @@ if __name__ == "__main__":
         class_ratio = test['Class'].value_counts(normalize=True)[1]
 
         fold_results = down_sample(train, test)
-        results_df.loc[n] = ['down_sample', n, class_ratio] + fold_results
+        results_df.loc[i] = ['down_sample', fn, class_ratio] + fold_results
 
-        n += 1
+        fold_results_random = split_and_ensemble(train, test, True)
+        results_df.loc[i] = ['random_split', fn, class_ratio] + fold_results_random
+
+        #TODO - make this work:
+        #fold_results_cluster = split_and_ensemble(train, test, False)
+        #results_df.loc[i] = ['cluster_split', fn, class_ratio] + fold_results_cluster
+
+        fn += 1
