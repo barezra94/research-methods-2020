@@ -68,10 +68,10 @@ def split_and_ensemble(train, test, random=True):
     # Split into R groups
     if random:
         # split randomly
-        split_majorities = np.array_split(majority, 2)
+        split_majorities = np.array_split(majority, R)
     else:
         # split by clustering
-        kmeans = KMeans(n_clusters=2)
+        kmeans = KMeans(n_clusters=R)
         kmeans.fit(majority)
         predicted_majority = kmeans.predict(majority)
 
@@ -79,7 +79,7 @@ def split_and_ensemble(train, test, random=True):
         majority = majority.sort_values(by=["group"])
 
         majority = majority.drop(columns=["group"])
-        split_majorities = np.array_split(majority, 2)
+        split_majorities = np.array_split(majority, R)
 
     R_test_results = []
     i = 0
