@@ -159,16 +159,21 @@ if __name__ == "__main__":
 
         class_ratio = test["Class"].value_counts(normalize=True)[1]
 
-        # fold_results = down_sample(train, test)
-        # results_df.loc[i] = ["down_sample", fn, class_ratio] + fold_results
+        fold_results = down_sample(train, test)
+        results_df.loc[i] = ["down_sample", fn, class_ratio] + fold_results
 
-        # fold_results_random = split_and_ensemble(train, test, True)
-        # results_df.loc[i] = ["random_split", fn, class_ratio] + fold_results_random
+        fold_results_random = split_and_ensemble(train, test, True)
+        results_df.loc[i + 1] = ["random_split", fn, class_ratio] + fold_results_random
 
         # TODO - make this work:
         fold_results_cluster = split_and_ensemble(train, test, False)
-        # results_df.loc[i] = ['cluster_split', fn, class_ratio] + fold_results_cluster
+        results_df.loc[i + 2] = [
+            "cluster_split",
+            fn,
+            class_ratio,
+        ] + fold_results_cluster
 
         fn += 1
+        i += 3
 
     results_df.to_csv("data.csv")
