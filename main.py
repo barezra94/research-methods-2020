@@ -29,7 +29,10 @@ def down_sample(train, test):
     df_downsampled = pd.concat([majority_downsampled, minority])
 
     print("Size of TRAIN is: " + str(df_downsampled.shape[0]))
-    print("Ratio of TRAIN is: " + str(df_downsampled['Class'].value_counts(normalize=True)[1]))
+    print(
+        "Ratio of TRAIN is: "
+        + str(df_downsampled["Class"].value_counts(normalize=True)[1])
+    )
 
     X = df_downsampled.drop(columns=["Class"])
     y = df_downsampled["Class"]
@@ -37,7 +40,7 @@ def down_sample(train, test):
     X_test = test.drop("Class", axis=1)
     y_test = test["Class"]
     print("Size of TEST is: " + str(test.shape[0]))
-    print("Ratio of TEST is: " + str(test['Class'].value_counts(normalize=True)[1]))
+    print("Ratio of TEST is: " + str(test["Class"].value_counts(normalize=True)[1]))
 
     y_prob = run_random_forest(X, X_test, y)
 
@@ -46,11 +49,9 @@ def down_sample(train, test):
     return classification_metrics(y_test, y_prob)
 
 
-def split_and_ensemble(train, test, random = True):
+def split_and_ensemble(train, test, random=True):
     # Get ratio of majority and minority
-    ratio = (
-            train["Class"].value_counts()[0] / dataset["Class"].value_counts()[1]
-    )
+    ratio = train["Class"].value_counts()[0] / dataset["Class"].value_counts()[1]
     R = int(ratio)
 
     train_data = train.copy()
@@ -58,30 +59,37 @@ def split_and_ensemble(train, test, random = True):
     X_test = test.drop("Class", axis=1)
     y_test = test["Class"]
     print("Size of TEST is: " + str(test.shape[0]))
-    print("Ratio of TEST is: " + str(test['Class'].value_counts(normalize=True)[1]))
+    print("Ratio of TEST is: " + str(test["Class"].value_counts(normalize=True)[1]))
 
     # Separate majority and minority classes
     majority = train_data[train_data["Class"] == 0]
     minority = train_data[train_data["Class"] == 1]
 
-    # Split into N (=ratio) groups
+    # Split into R groups
     if random:
-        #split randomly
-        split_majorities = np.array_split(majority, R)
+        # split randomly
+        split_majorities = np.array_split(majority, 2)
     else:
         # split by clustering
-        # TODO
-        split_majorities = None
+        kmeans = KMeans(n_clusters=2)
+        kmeans.fit(majority)
+        predicted_majority = kmeans.predict(majority)
+
+        majority["group"] = predicted_majority
+        majority = majority.sort_values(by=["group"])
+
+        majority = majority.drop(columns=["group"])
+        split_majorities = np.array_split(majority, 2)
 
     R_test_results = []
     i = 0
     for group in split_majorities:
         df = pd.concat([group, minority])
-        
+
         X = df.drop(columns=["Class"])
         y = df["Class"]
 
-        y_prob = run_random_forest(X, X_test,y)
+        y_prob = run_random_forest(X, X_test, y)
 
         R_test_results.append(y_prob)
 
@@ -131,24 +139,36 @@ if __name__ == "__main__":
     skfold = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
     fn = 0
     i = 0
-    results_df = pd.DataFrame(columns=('method', 'fold_number', 'class_ratio', 'f1', 'precision', 'recall', 'auc'))
+    results_df = pd.DataFrame(
+        columns=(
+            "method",
+            "fold_number",
+            "class_ratio",
+            "f1",
+            "precision",
+            "recall",
+            "auc",
+        )
+    )
 
-    for train_index, test_index in skfold.split(dataset, dataset['Class']):
+    for train_index, test_index in skfold.split(dataset, dataset["Class"]):
         print("**** Fold #", fn, " ****")
         print("Train:", train_index, "Test:", test_index)
 
         train, test = dataset.iloc[train_index], dataset.iloc[test_index]
 
-        class_ratio = test['Class'].value_counts(normalize=True)[1]
+        class_ratio = test["Class"].value_counts(normalize=True)[1]
 
-        fold_results = down_sample(train, test)
-        results_df.loc[i] = ['down_sample', fn, class_ratio] + fold_results
+        # fold_results = down_sample(train, test)
+        # results_df.loc[i] = ["down_sample", fn, class_ratio] + fold_results
 
-        fold_results_random = split_and_ensemble(train, test, True)
-        results_df.loc[i] = ['random_split', fn, class_ratio] + fold_results_random
+        # fold_results_random = split_and_ensemble(train, test, True)
+        # results_df.loc[i] = ["random_split", fn, class_ratio] + fold_results_random
 
-        #TODO - make this work:
-        #fold_results_cluster = split_and_ensemble(train, test, False)
-        #results_df.loc[i] = ['cluster_split', fn, class_ratio] + fold_results_cluster
+        # TODO - make this work:
+        fold_results_cluster = split_and_ensemble(train, test, False)
+        # results_df.loc[i] = ['cluster_split', fn, class_ratio] + fold_results_cluster
 
         fn += 1
+
+    results_df.to_csv("data.csv")
