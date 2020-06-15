@@ -121,20 +121,10 @@ def classification_metrics(y_test, y_prob):
 
 
 if __name__ == "__main__":
-    dataset = pd.read_csv("data/creditcard.csv")
+    dataset = pd.read_csv("data/bank-additional-full.csv")
     print(dataset.shape)
     dataset = dataset.sample(frac=1).reset_index(drop=True)
     rob_scaler = RobustScaler()
-
-    # Standerize the data
-    dataset["scaled_amount"] = rob_scaler.fit_transform(
-        dataset["Amount"].values.reshape(-1, 1)
-    )
-    dataset["scaled_time"] = rob_scaler.fit_transform(
-        dataset["Time"].values.reshape(-1, 1)
-    )
-
-    dataset.drop(["Time", "Amount"], axis=1, inplace=True)
 
     # Split to 10-Fold
     skfold = StratifiedKFold(n_splits=10, random_state=None, shuffle=False)
