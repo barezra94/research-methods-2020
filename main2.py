@@ -49,7 +49,7 @@ def down_sample(train, test):
     return classification_metrics(y_test, y_prob)
 
 
-def split_and_ensemble(train, test, random=True):
+def split_and_ensemble(train, test, init, random=True):
     # Get ratio of majority and minority
     ratio = train["Class"].value_counts()[0] / dataset["Class"].value_counts()[1]
     R = int(ratio)
@@ -71,7 +71,7 @@ def split_and_ensemble(train, test, random=True):
         split_majorities = np.array_split(majority, R)
     else:
         # split by clustering
-        kmeans = KMeans(n_clusters=R)
+        kmeans = KMeans(n_clusters=R, n_init=init)
         kmeans.fit(majority)
         predicted_majority = kmeans.predict(majority)
 
@@ -121,7 +121,7 @@ def classification_metrics(y_test, y_prob):
 
 
 if __name__ == "__main__":
-    dataset = pd.read_csv("data/bank-additional-full.csv")
+    dataset = pd.read_csv("data/bank-additional-full_normalize.csv")
     print(dataset.shape)
     dataset = dataset.sample(frac=1).reset_index(drop=True)
     rob_scaler = RobustScaler()
@@ -150,16 +150,28 @@ if __name__ == "__main__":
 
         class_ratio = test["Class"].value_counts(normalize=True)[1]
 
-        fold_results = down_sample(train, test)
-        results_df.loc[i] = ["down_sample", fn, class_ratio] + fold_results
+        # fold_results = down_sample(train, test)
+        # results_df.loc[i] = ["down_sample", fn, class_ratio] + fold_results
+        fold_results_cluster_10 = split_and_ensemble(train, test, 10, False)
+        results_df.loc[i] = [
+            "cluster_split - init 10",
+            fn,
+            class_ratio,
+        ] + fold_results_cluster_10
 
-        fold_results_random = split_and_ensemble(train, test, True)
-        results_df.loc[i + 1] = ["random_split", fn, class_ratio] + fold_results_random
+        # fold_results_random = split_and_ensemble(train, test, True)
+        # results_df.loc[i + 1] = ["random_split", fn, class_ratio] + fold_results_random
+        fold_results_cluster_20 = split_and_ensemble(train, test, 20, False)
+        results_df.loc[i + 1] = [
+            "cluster_split - init 20",
+            fn,
+            class_ratio,
+        ] + fold_results_cluster_20
 
         # TODO - make this work:
-        fold_results_cluster = split_and_ensemble(train, test, False)
+        fold_results_cluster = split_and_ensemble(train, test, 50, False)
         results_df.loc[i + 2] = [
-            "cluster_split",
+            "cluster_split_50",
             fn,
             class_ratio,
         ] + fold_results_cluster
